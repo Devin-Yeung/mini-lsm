@@ -278,8 +278,32 @@ impl LsmStorageInner {
     }
 
     /// Get a key from the storage. In day 7, this can be further optimized by using a bloom filter.
-    pub fn get(&self, _key: &[u8]) -> Result<Option<Bytes>> {
-        unimplemented!()
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        let guard = self.state.read();
+
+        // search on current memtable
+        if let Some(value) = guard.memtable.get(key) {
+            if value.is_empty() {
+                // found tombstone, return key not exists
+                return Ok(None);
+            }
+            return Ok(Some(value));
+        }
+
+        // search on immutable memtables
+        if let Some(value) = guard
+            .imm_memtables
+            .iter()
+            .find_map(|memtable| memtable.get(key))
+        {
+            if value.is_empty() {
+                // found tombstone, return key not exists
+                return Ok(None);
+            }
+            return Ok(Some(value));
+        }
+
+        Ok(None)
     }
 
     /// Write a batch of data into the storage. Implement in week 2 day 7.
@@ -288,13 +312,16 @@ impl LsmStorageInner {
     }
 
     /// Put a key-value pair into the storage by writing into the current memtable.
-    pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        unimplemented!()
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.state.write().memtable.put(key, value)?;
+        Ok(())
     }
 
     /// Remove a key from the storage by writing an empty value.
-    pub fn delete(&self, _key: &[u8]) -> Result<()> {
-        unimplemented!()
+    pub fn delete(&self, key: &[u8]) -> Result<()> {
+        // Just put a tombstone to mark as deleted
+        self.state.write().memtable.put(key, b"")?;
+        Ok(())
     }
 
     pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
