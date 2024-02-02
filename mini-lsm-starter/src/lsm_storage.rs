@@ -384,7 +384,7 @@ impl LsmStorageInner {
         let mut guard = self.state.write();
         let mut snapshot = guard.as_ref().clone();
         let inactive_memtable = std::mem::replace(&mut snapshot.memtable, memtable);
-        snapshot.imm_memtables.push(inactive_memtable);
+        snapshot.imm_memtables.insert(0, inactive_memtable);
         // Update the snapshot
         *guard = Arc::new(snapshot);
 
